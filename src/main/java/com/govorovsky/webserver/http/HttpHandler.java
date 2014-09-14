@@ -1,4 +1,4 @@
-package com.govorovsky.webserver;
+package com.govorovsky.webserver.http;
 
 import com.govorovsky.webserver.http.entities.HttpMethod;
 import com.govorovsky.webserver.http.entities.HttpRequest;

@@ -1,4 +1,6 @@
-package com.govorovsky.webserver;
+package com.govorovsky.webserver.server;
+
+import com.govorovsky.webserver.http.HttpSession;
 
 import java.net.Socket;
 import java.util.concurrent.ConcurrentLinkedQueue;

@@ -1,8 +1,9 @@
-package com.govorovsky.webserver;
+package com.govorovsky.webserver.http;
 
 import com.govorovsky.webserver.http.entities.*;
 import com.govorovsky.webserver.http.util.HttpUtils;
 import com.govorovsky.webserver.http.util.LambdaUtils;
+import com.govorovsky.webserver.server.GHTTPServer;
 
 import java.io.*;
 import java.net.SocketTimeoutException;
@@ -93,13 +94,7 @@ public class HttpSession {
         if ((headers = resp.getHeaders()) != null) {
             headers.forEach(LambdaUtils.wrap((k, v) -> bufferedWriter.write(k + ": " + v + HttpConstants.CRLF)));
         }
-        if (resp.getCode() != HttpStatusCode.HTTP_200) {
-            bufferedWriter.write(HttpConstants.HTTP_CONNECTION + ": " + HttpConstants.HTTP_CONNECTION_CLOSE + HttpConstants.CRLF + HttpConstants.CRLF);
-//            bufferedWriter.write("Connection: keep-alive\r\n\r\n");
-        } else {
-            bufferedWriter.write(HttpConstants.HTTP_CONNECTION + ": " + HttpConstants.HTTP_CONNECTION_CLOSE + HttpConstants.CRLF + HttpConstants.CRLF);
-//            bufferedWriter.write("Connection: keep-alive\r\n\r\n");
-        }
+        bufferedWriter.write(HttpConstants.HTTP_CONNECTION + ": " + HttpConstants.HTTP_CONNECTION_CLOSE + HttpConstants.CRLF + HttpConstants.CRLF);
         bufferedWriter.flush();
         if (resp.getRequested() != null && resp.getHttpMethod() != HttpMethod.HEAD) {
             serveFile(resp, outputStream);

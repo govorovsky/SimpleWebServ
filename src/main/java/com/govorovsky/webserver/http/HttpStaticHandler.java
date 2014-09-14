@@ -1,6 +1,7 @@
-package com.govorovsky.webserver;
+package com.govorovsky.webserver.http;
 
 import com.govorovsky.webserver.http.entities.*;
+import com.govorovsky.webserver.server.GHTTPServer;
 
 import java.io.File;
 import java.io.IOException;

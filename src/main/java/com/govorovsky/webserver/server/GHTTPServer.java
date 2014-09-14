@@ -1,4 +1,7 @@
-package com.govorovsky.webserver;
+package com.govorovsky.webserver.server;
+
+import com.govorovsky.webserver.http.HttpHandler;
+import com.govorovsky.webserver.http.HttpStaticHandler;
 
 import java.io.IOException;
 import java.net.ServerSocket;
@@ -19,7 +22,7 @@ public class GHTTPServer {
     private ServerSocket socket;
 
 
-    public GHTTPServer() throws IOException {
+    public GHTTPServer() {
         this(DEFAULT_PORT, new HttpStaticHandler(), Runtime.getRuntime().availableProcessors() + 1);
     }
 
@@ -56,7 +59,6 @@ public class GHTTPServer {
     public static String getDocumentRoot() {
         return DOCUMENT_ROOT;
     }
-
     public static HttpHandler getHandler() {
         return handler;
     }
