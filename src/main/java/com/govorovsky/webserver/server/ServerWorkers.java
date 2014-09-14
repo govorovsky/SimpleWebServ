@@ -9,13 +9,13 @@ import java.util.concurrent.LinkedBlockingQueue;
 /**
  * Created by Andrew Govorovsky on 11.09.14
  */
-public class HttpWorkers {
+public class ServerWorkers {
     private final LinkedBlockingQueue<Socket> clients = new LinkedBlockingQueue<>();
     private final ConcurrentLinkedQueue<Worker> workers = new ConcurrentLinkedQueue<>();
     private int workersAmount;
     private volatile boolean running;
 
-    public HttpWorkers(int workersAmount) {
+    public ServerWorkers(int workersAmount) {
         this.workersAmount = workersAmount;
         for (int i = 0; i < workersAmount; i++) {
             workers.add(new Worker());

@@ -18,7 +18,7 @@ public class GHTTPServer {
     private static final String DOCUMENT_ROOT = "./htdocs";
     private static final String signature = "GHTTP Server 0.1";
     private static HttpHandler handler;
-    private final HttpWorkers httpWorkers;
+    private final ServerWorkers serverWorkers;
     private ServerSocket socket;
 
 
@@ -29,17 +29,17 @@ public class GHTTPServer {
     public GHTTPServer(int port, HttpHandler handler, int numWorkers) {
         this.port = port;
         GHTTPServer.handler = handler;
-        httpWorkers = new HttpWorkers(numWorkers);
+        serverWorkers = new ServerWorkers(numWorkers);
     }
 
     public void start() throws IOException {
         socket = new ServerSocket(port);
-        httpWorkers.start();
+        serverWorkers.start();
         System.err.println("Server starting on port: " + port);
         new Thread(() -> {
             while (!socket.isClosed()) {
                 try {
-                    httpWorkers.handleClient(socket.accept());
+                    serverWorkers.handleClient(socket.accept());
                 } catch (IOException e) {
                     return;
                 }
@@ -53,7 +53,7 @@ public class GHTTPServer {
         } catch (IOException e) {
             e.printStackTrace();
         }
-        httpWorkers.stop();
+        serverWorkers.stop();
     }
 
     public static String getDocumentRoot() {
