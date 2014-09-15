@@ -39,14 +39,9 @@ public class HttpSession {
         if (line == null) return -1; /* client closed socket */
 
         String tokens[] = line.split(" ");
-        if (tokens.length < 3) {
+        if (tokens.length != 3) {
             sendError(400);
             return -1;
-        }
-        if (tokens.length > 3) {
-            for (int i = 2; i < tokens.length - 1; i++) {
-                tokens[1] += ' ' + tokens[i];
-            }
         }
 
         HttpMethod method = HttpMethod.parseMethod(tokens[0]);
