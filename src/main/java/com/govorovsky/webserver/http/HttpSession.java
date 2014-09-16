@@ -98,7 +98,7 @@ public class HttpSession {
 
     private void serveFile(HttpResponse response, OutputStream outputStream) {
         BufferedOutputStream bufferedOutputStream = new BufferedOutputStream(outputStream);
-        try (InputStream is = new FileInputStream(response.getRequested())) {
+        try (InputStream is = new BufferedInputStream(new FileInputStream(response.getRequested()))) {
             byte[] buffer = new byte[BUFF_SIZE];
             while (is.available() > 0) {
                 int read = is.read(buffer);
