@@ -118,31 +118,37 @@ public class HttpSession {
     }
 
     private void serveFile(HttpResponse response) {
-        try (AsynchronousFileChannel asynchronousFileChannel = AsynchronousFileChannel.open(response.getRequested().toPath(), StandardOpenOption.READ)) {
+        try {
+            AsynchronousFileChannel asynchronousFileChannel = AsynchronousFileChannel.open(response.getRequested().toPath(), StandardOpenOption.READ);
             ByteBuffer buffer = ByteBuffer.allocate(BUFF_SIZE);
             long fileLen = asynchronousFileChannel.size();
             asynchronousFileChannel.read(buffer, 0, 0L, new CompletionHandler<Integer, Long>() {
                 @Override
                 public void completed(Integer result, Long totalBytesRead) {
                     totalBytesRead += result;
+                    buffer.flip();
+//                    System.err.println(buffer.remaining());
+                    socketChannel.write(buffer, null, new CompletionHandler<Integer, Void>() {
+                        @Override
+                        public void completed(Integer result, Void a) {
+                        }
+
+                        @Override
+                        public void failed(Throwable exc, Void a) {
+                            exc.printStackTrace();
+                        }
+                    });
+//                    System.err.println("readed:" + buffer.remaining());
                     if (totalBytesRead < fileLen) {
+                        buffer.clear();
                         asynchronousFileChannel.read(buffer, result, totalBytesRead, this);
                     } else {
-                        socketChannel.write(buffer, null, new CompletionHandler<Integer, Object>() {
-                            @Override
-                            public void completed(Integer result, Object attachment) {
-                                try {
-                                    socketChannel.close();
-                                } catch (IOException e) {
-                                    e.printStackTrace();
-                                }
-                            }
-
-                            @Override
-                            public void failed(Throwable exc, Object attachment) {
-                                exc.printStackTrace();
-                            }
-                        });
+                        try {
+                            socketChannel.close();
+                            asynchronousFileChannel.close();
+                        } catch (IOException e) {
+                            e.printStackTrace();
+                        }
                     }
                 }
 

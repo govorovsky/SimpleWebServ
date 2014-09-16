@@ -3,7 +3,6 @@ package com.govorovsky.webserver.server;
 import com.govorovsky.webserver.http.HttpHandler;
 import com.govorovsky.webserver.http.HttpStaticHandler;
 
-import javax.sql.rowset.serial.SerialRef;
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.nio.channels.AsynchronousServerSocketChannel;
@@ -27,7 +26,7 @@ public class GHTTPServer {
 
 
     public GHTTPServer() {
-        this(DEFAULT_PORT, new HttpStaticHandler(), Runtime.getRuntime().availableProcessors() + 1);
+        this(DEFAULT_PORT, new HttpStaticHandler(), 4);
     }
 
     public GHTTPServer(int port, HttpHandler handler, int numWorkers) {
@@ -35,24 +34,29 @@ public class GHTTPServer {
         GHTTPServer.handler = handler;
         serverWorkers = new ServerWorkers(numWorkers);
     }
-
     public void start() throws IOException {
         socketChannel = AsynchronousServerSocketChannel.open().bind(new InetSocketAddress(8080), 100);
         serverWorkers.start();
         System.err.println("Server starting on port: " + port);
         new Thread(() -> {
-            while (!socketChannel.isOpen()) {
-                socketChannel.accept(null, new CompletionHandler<AsynchronousSocketChannel, Object>() {
-                    @Override
-                    public void completed(AsynchronousSocketChannel result, Object attachment) {
-                        serverWorkers.handleClient(result);
-                    }
+            socketChannel.accept(null, new CompletionHandler<AsynchronousSocketChannel, Object>() {
+                @Override
+                public void completed(AsynchronousSocketChannel result, Object attachment) {
+                    socketChannel.accept(null, this);
+                    serverWorkers.handleClient(result);
+                }
 
-                    @Override
-                    public void failed(Throwable exc, Object attachment) {
-                        exc.printStackTrace();
-                    }
-                });
+                @Override
+                public void failed(Throwable exc, Object attachment) {
+                    exc.printStackTrace();
+                }
+            });
+            while (true) {
+                try {
+                    Thread.sleep(1000);
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
+                }
             }
         }).start();
     }
