@@ -5,8 +5,15 @@ import com.govorovsky.webserver.http.util.HttpUtils;
 import com.govorovsky.webserver.http.util.LambdaUtils;
 import com.govorovsky.webserver.server.GHTTPServer;
 
-import java.io.*;
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.StringReader;
 import java.net.SocketTimeoutException;
+import java.nio.ByteBuffer;
+import java.nio.channels.AsynchronousFileChannel;
+import java.nio.channels.AsynchronousSocketChannel;
+import java.nio.channels.CompletionHandler;
+import java.nio.file.StandardOpenOption;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
@@ -17,19 +24,18 @@ import java.util.Map;
  * Created by Andrew Govorovsky on 07.09.14
  */
 public class HttpSession {
-    private final InputStream inputStream;
-    private final OutputStream outputStream;
-    private static final int BUFF_SIZE = 8192;
+    private static final int HEADER_LENGTH = 8129; // The full header should fit in here ( Apache's default 8kb )
+    private static final int BUFF_SIZE = 8192; // Filesystem block size
+    private final AsynchronousSocketChannel socketChannel;
     private static final DateTimeFormatter dateTimeFormatter = DateTimeFormatter.RFC_1123_DATE_TIME;
 
-    public HttpSession(InputStream inputStream, OutputStream outputStream) {
-        this.inputStream = inputStream;
-        this.outputStream = outputStream;
+    public HttpSession(AsynchronousSocketChannel socketChannel) {
+        this.socketChannel = socketChannel;
     }
 
 
-    private int parseRequest(HttpRequest httpRequest) throws IOException {
-        BufferedReader bufferedReader = new BufferedReader(new InputStreamReader(inputStream));
+    private int parseRequest(HttpRequest httpRequest, ByteBuffer src) throws IOException {
+        BufferedReader bufferedReader = new BufferedReader(new StringReader(new String(src.array())));
         String line;
         try {
             line = bufferedReader.readLine();
@@ -82,48 +88,98 @@ public class HttpSession {
     }
 
     private void sendResponse(HttpResponse resp) throws IOException {
-        BufferedWriter bufferedWriter = new BufferedWriter(new OutputStreamWriter(outputStream));
-        bufferedWriter.write(resp.getHttpVersion().toString() + ' ' + resp.getCode().toString() + HttpConstants.CRLF);
-        bufferedWriter.write(HttpConstants.HTTP_DATE + ' ' + ZonedDateTime.now(ZoneId.of("GMT")).format(dateTimeFormatter) + HttpConstants.CRLF);
+        StringBuilder builder = new StringBuilder();
+        builder.append(resp.getHttpVersion().toString()).append(' ').append(resp.getCode().toString()).append(HttpConstants.CRLF);
+        builder.append(HttpConstants.HTTP_DATE).append(' ').append(ZonedDateTime.now(ZoneId.of("GMT")).format(dateTimeFormatter)).append(HttpConstants.CRLF);
         Map<String, String> headers;
         if ((headers = resp.getHeaders()) != null) {
-            headers.forEach(LambdaUtils.wrap((k, v) -> bufferedWriter.write(k + ": " + v + HttpConstants.CRLF)));
+            headers.forEach(LambdaUtils.wrap((k, v) -> builder.append(k).append(": ").append(v).append(HttpConstants.CRLF)));
         }
-        bufferedWriter.write(HttpConstants.HTTP_CONNECTION + ": " + HttpConstants.HTTP_CONNECTION_CLOSE + HttpConstants.CRLF + HttpConstants.CRLF);
-        bufferedWriter.flush();
-        if (resp.getRequested() != null && resp.getHttpMethod() != HttpMethod.HEAD) {
-            serveFile(resp, outputStream);
-        }
+        builder.append(HttpConstants.HTTP_CONNECTION + ": " + HttpConstants.HTTP_CONNECTION_CLOSE + HttpConstants.CRLF + HttpConstants.CRLF);
+        socketChannel.write(ByteBuffer.wrap(builder.toString().getBytes()), null, new CompletionHandler<Integer, Object>() {
+            @Override
+            public void completed(Integer result, Object attachment) {
+                if (resp.getRequested() != null && resp.getHttpMethod() != HttpMethod.HEAD) {
+                    serveFile(resp);
+                } else {
+                    try {
+                        socketChannel.close();
+                    } catch (IOException e) {
+                        e.printStackTrace();
+                    }
+                }
+            }
+
+            @Override
+            public void failed(Throwable exc, Object attachment) {
+
+            }
+        });
     }
 
-    private void serveFile(HttpResponse response, OutputStream outputStream) {
-        BufferedOutputStream bufferedOutputStream = new BufferedOutputStream(outputStream);
-        try (InputStream is = new FileInputStream(response.getRequested())) {
-            byte[] buffer = new byte[BUFF_SIZE];
-            while (is.available() > 0) {
-                int read = is.read(buffer);
-                bufferedOutputStream.write(buffer, 0, read);
-            }
+    private void serveFile(HttpResponse response) {
+        try (AsynchronousFileChannel asynchronousFileChannel = AsynchronousFileChannel.open(response.getRequested().toPath(), StandardOpenOption.READ)) {
+            ByteBuffer buffer = ByteBuffer.allocate(BUFF_SIZE);
+            long fileLen = asynchronousFileChannel.size();
+            asynchronousFileChannel.read(buffer, 0, 0L, new CompletionHandler<Integer, Long>() {
+                @Override
+                public void completed(Integer result, Long totalBytesRead) {
+                    totalBytesRead += result;
+                    if (totalBytesRead < fileLen) {
+                        asynchronousFileChannel.read(buffer, result, totalBytesRead, this);
+                    } else {
+                        socketChannel.write(buffer, null, new CompletionHandler<Integer, Object>() {
+                            @Override
+                            public void completed(Integer result, Object attachment) {
+                                try {
+                                    socketChannel.close();
+                                } catch (IOException e) {
+                                    e.printStackTrace();
+                                }
+                            }
+
+                            @Override
+                            public void failed(Throwable exc, Object attachment) {
+                                exc.printStackTrace();
+                            }
+                        });
+                    }
+                }
+
+                @Override
+                public void failed(Throwable exc, Long attachment) {
+                    exc.printStackTrace();
+                }
+            });
         } catch (IOException e) {
             e.printStackTrace();
-            return;
-        }
-        try {
-            bufferedOutputStream.flush();
-        } catch (IOException e) {
-            /* ignore */
         }
     }
 
     public int run() throws IOException {
-        HttpRequest request = new HttpRequest();
-        HttpResponse response = new HttpResponse();
-        if (parseRequest(request) == -1) {
-            return -1;
-        }
-        HttpHandler httpHandler = GHTTPServer.getHandler();
-        httpHandler.service(request, response);
-        sendResponse(response);
+        final HttpRequest request = new HttpRequest();
+        final HttpResponse response = new HttpResponse();
+        ByteBuffer byteBuffer = ByteBuffer.allocate(HEADER_LENGTH);
+        socketChannel.read(byteBuffer, request, new CompletionHandler<Integer, HttpRequest>() {
+            @Override
+            public void completed(Integer result, HttpRequest attachment) {
+                try {
+                    if (parseRequest(request, byteBuffer) == -1) {
+                        return;
+                    }
+                    HttpHandler httpHandler = GHTTPServer.getHandler();
+                    httpHandler.service(request, response);
+                    sendResponse(response);
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
+            }
+
+            @Override
+            public void failed(Throwable exc, HttpRequest attachment) {
+                exc.printStackTrace();
+            }
+        });
         return 0;
     }
 }

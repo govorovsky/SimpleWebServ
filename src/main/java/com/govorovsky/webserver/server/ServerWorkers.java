@@ -3,6 +3,8 @@ package com.govorovsky.webserver.server;
 import com.govorovsky.webserver.http.HttpSession;
 
 import java.net.Socket;
+import java.net.StandardSocketOptions;
+import java.nio.channels.AsynchronousSocketChannel;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.LinkedBlockingQueue;
 
@@ -10,7 +12,7 @@ import java.util.concurrent.LinkedBlockingQueue;
  * Created by Andrew Govorovsky on 11.09.14
  */
 public class ServerWorkers {
-    private final LinkedBlockingQueue<Socket> clients = new LinkedBlockingQueue<>();
+    private final LinkedBlockingQueue<AsynchronousSocketChannel> clients = new LinkedBlockingQueue<>();
     private final ConcurrentLinkedQueue<Worker> workers = new ConcurrentLinkedQueue<>();
     private int workersAmount;
     private volatile boolean running;
@@ -37,7 +39,7 @@ public class ServerWorkers {
         }
     }
 
-    public void handleClient(Socket accepted) {
+    public void handleClient(AsynchronousSocketChannel accepted) {
         clients.add(accepted);
     }
 
@@ -50,11 +52,10 @@ public class ServerWorkers {
 
             while (running) {
                 try {
-                    Socket client = clients.take();
-                    if(client.isClosed()) continue;
-                    client.setSoTimeout(300);
-                    new HttpSession(client.getInputStream(), client.getOutputStream()).run();
-                    client.close();
+                    AsynchronousSocketChannel client = clients.take();
+                    if(!client.isOpen()) continue;
+                    client.setOption(StandardSocketOptions.SO_KEEPALIVE, true);
+                    new HttpSession(client).run();
                 } catch (InterruptedException e) {
                     System.err.println(Thread.currentThread().getName() + " interrupted");
                     break;

@@ -3,8 +3,12 @@ package com.govorovsky.webserver.server;
 import com.govorovsky.webserver.http.HttpHandler;
 import com.govorovsky.webserver.http.HttpStaticHandler;
 
+import javax.sql.rowset.serial.SerialRef;
 import java.io.IOException;
-import java.net.ServerSocket;
+import java.net.InetSocketAddress;
+import java.nio.channels.AsynchronousServerSocketChannel;
+import java.nio.channels.AsynchronousSocketChannel;
+import java.nio.channels.CompletionHandler;
 
 /**
  * Simple multithreading HTTP server which using thread pools
@@ -19,7 +23,7 @@ public class GHTTPServer {
     private static final String signature = "GHTTP Server 0.1";
     private static HttpHandler handler;
     private final ServerWorkers serverWorkers;
-    private ServerSocket socket;
+    private AsynchronousServerSocketChannel socketChannel;
 
 
     public GHTTPServer() {
@@ -33,23 +37,29 @@ public class GHTTPServer {
     }
 
     public void start() throws IOException {
-        socket = new ServerSocket(port);
+        socketChannel = AsynchronousServerSocketChannel.open().bind(new InetSocketAddress(8080), 100);
         serverWorkers.start();
         System.err.println("Server starting on port: " + port);
         new Thread(() -> {
-            while (!socket.isClosed()) {
-                try {
-                    serverWorkers.handleClient(socket.accept());
-                } catch (IOException e) {
-                    return;
-                }
+            while (!socketChannel.isOpen()) {
+                socketChannel.accept(null, new CompletionHandler<AsynchronousSocketChannel, Object>() {
+                    @Override
+                    public void completed(AsynchronousSocketChannel result, Object attachment) {
+                        serverWorkers.handleClient(result);
+                    }
+
+                    @Override
+                    public void failed(Throwable exc, Object attachment) {
+                        exc.printStackTrace();
+                    }
+                });
             }
         }).start();
     }
 
     public void stop() {
         try {
-            socket.close();
+            socketChannel.close();
         } catch (IOException e) {
             e.printStackTrace();
         }
@@ -59,6 +69,7 @@ public class GHTTPServer {
     public static String getDocumentRoot() {
         return DOCUMENT_ROOT;
     }
+
     public static HttpHandler getHandler() {
         return handler;
     }
