@@ -73,7 +73,8 @@ public class GHTTPServer {
 
 
     public static void main(String[] args) throws IOException {
-        GHTTPServer server = new GHTTPServer();
-        server.start();
+//        GHTTPServer server = new GHTTPServer();
+        GHTTPServer server1 = new GHTTPServer(8080, new HttpStaticHandler(), 4);
+        server1.start();
     }
 }
