@@ -6,7 +6,10 @@ import com.govorovsky.webserver.http.util.LambdaUtils;
 import com.govorovsky.webserver.server.GHTTPServer;
 
 import java.io.*;
+import java.net.Socket;
 import java.net.SocketTimeoutException;
+import java.nio.channels.FileChannel;
+import java.nio.channels.SocketChannel;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
@@ -19,12 +22,13 @@ import java.util.Map;
 public class HttpSession {
     private final InputStream inputStream;
     private final OutputStream outputStream;
-    private static final int BUFF_SIZE = 8192;
+    private final Socket socket;
     private static final DateTimeFormatter dateTimeFormatter = DateTimeFormatter.RFC_1123_DATE_TIME;
 
-    public HttpSession(InputStream inputStream, OutputStream outputStream) {
-        this.inputStream = inputStream;
-        this.outputStream = outputStream;
+    public HttpSession(Socket socket) throws IOException {
+        this.socket = socket;
+        this.inputStream = socket.getInputStream();
+        this.outputStream = socket.getOutputStream();
     }
 
 
@@ -92,26 +96,23 @@ public class HttpSession {
         bufferedWriter.write(HttpConstants.HTTP_CONNECTION + ": " + HttpConstants.HTTP_CONNECTION_CLOSE + HttpConstants.CRLF + HttpConstants.CRLF);
         bufferedWriter.flush();
         if (resp.getRequested() != null && resp.getHttpMethod() != HttpMethod.HEAD) {
-            serveFile(resp, outputStream);
+            serveFile(resp, socket);
         }
     }
 
-    private void serveFile(HttpResponse response, OutputStream outputStream) {
-        BufferedOutputStream bufferedOutputStream = new BufferedOutputStream(outputStream);
-        try (InputStream is = new BufferedInputStream(new FileInputStream(response.getRequested()))) {
-            byte[] buffer = new byte[BUFF_SIZE];
-            while (is.available() > 0) {
-                int read = is.read(buffer);
-                bufferedOutputStream.write(buffer, 0, read);
+
+    private void serveFile(HttpResponse response, Socket socket) {
+        try (FileChannel fileChannel = new FileInputStream(response.getRequested()).getChannel()) {
+            long transferred = 0;
+            long total = fileChannel.size();
+            SocketChannel socketChannel = socket.getChannel();
+            long cur;
+            for (cur = fileChannel.transferTo(transferred, total, socketChannel); cur < total; ) {
+                transferred += cur;
+                total -= cur;
             }
         } catch (IOException e) {
             e.printStackTrace();
-            return;
-        }
-        try {
-            bufferedOutputStream.flush();
-        } catch (IOException e) {
-            /* ignore */
         }
     }
 

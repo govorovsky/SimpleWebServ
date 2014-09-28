@@ -10,7 +10,7 @@ import com.govorovsky.webserver.http.entities.HttpResponse;
 public abstract class HttpHandler {
     public final HttpResponse service(HttpRequest req, HttpResponse resp) {
         HttpMethod method = req.getHttpMethod();
-        System.out.println(method);
+//        System.out.println(method);
         switch (method) {
             case GET:
             case HEAD:

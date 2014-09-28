@@ -65,7 +65,7 @@ public class ServerWorkers {
                     Socket client = clients.take();
                     if (client.isClosed()) continue;
                     client.setSoTimeout(300);
-                    new HttpSession(client.getInputStream(), client.getOutputStream()).run();
+                    new HttpSession(client).run();
                     client.close();
                 } catch (InterruptedException e) {
                     System.err.println(Thread.currentThread().getName() + " interrupted");

@@ -4,7 +4,8 @@ import com.govorovsky.webserver.http.HttpHandler;
 import com.govorovsky.webserver.http.HttpStaticHandler;
 
 import java.io.IOException;
-import java.net.ServerSocket;
+import java.net.InetSocketAddress;
+import java.nio.channels.ServerSocketChannel;
 
 /**
  * Simple multithreading HTTP server which using thread pools
@@ -19,11 +20,11 @@ public class GHTTPServer {
     private static final String signature = "GHTTP Server 0.1";
     private static HttpHandler handler;
     private final ServerWorkers serverWorkers;
-    private ServerSocket socket;
+    private ServerSocketChannel socket;
 
 
     public GHTTPServer() {
-        this(DEFAULT_PORT, new HttpStaticHandler(), Runtime.getRuntime().availableProcessors() + 1);
+        this(DEFAULT_PORT, new HttpStaticHandler(), Runtime.getRuntime().availableProcessors());
     }
 
     public GHTTPServer(int port, HttpHandler handler, int numWorkers) {
@@ -33,13 +34,13 @@ public class GHTTPServer {
     }
 
     public void start() throws IOException {
-        socket = new ServerSocket(port);
+        socket = ServerSocketChannel.open().bind(new InetSocketAddress("127.0.0.1", port));
         serverWorkers.start();
         System.err.println("Server starting on port: " + port);
         new Thread(() -> {
-            while (!socket.isClosed()) {
+            while (socket.isOpen()) {
                 try {
-                    serverWorkers.handleClient(socket.accept());
+                    serverWorkers.handleClient(socket.accept().socket());
                 } catch (IOException e) {
                     return;
                 }
@@ -59,6 +60,7 @@ public class GHTTPServer {
     public static String getDocumentRoot() {
         return DOCUMENT_ROOT;
     }
+
     public static HttpHandler getHandler() {
         return handler;
     }
@@ -73,8 +75,7 @@ public class GHTTPServer {
 
 
     public static void main(String[] args) throws IOException {
-//        GHTTPServer server = new GHTTPServer();
-        GHTTPServer server1 = new GHTTPServer(8080, new HttpStaticHandler(), 4);
-        server1.start();
+        new GHTTPServer().start();
+//        GHTTPServer server1 = new GHTTPServer(8080, new HttpStaticHandler(), 4);
     }
 }
