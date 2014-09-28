@@ -106,8 +106,8 @@ public class HttpSession {
             long transferred = 0;
             long total = fileChannel.size();
             SocketChannel socketChannel = socket.getChannel();
-            long cur;
-            for (cur = fileChannel.transferTo(transferred, total, socketChannel); cur < total; ) {
+            while (transferred < total) {
+                long cur = fileChannel.transferTo(transferred, total, socketChannel);
                 transferred += cur;
                 total -= cur;
             }
